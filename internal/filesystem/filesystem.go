@@ -36,6 +36,9 @@ type FileSystem interface {
 
 	// Abs returns an absolute representation of path.
 	Abs(path string) (string, error)
+
+	// Remove deletes a single file. It is not an error if path doesn't exist.
+	Remove(path string) error
 }
 
 // OSFileSystem is the production FileSystem implementation backed by the
@@ -111,4 +114,11 @@ func (fs *OSFileSystem) Abs(path string) (string, error) {
 		return "", fmt.Errorf("filesystem: failed to resolve absolute path for %q: %w", path, err)
 	}
 	return abs, nil
+}
+
+func (fs *OSFileSystem) Remove(path string) error {
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("filesystem: failed to remove %q: %w", path, err)
+	}
+	return nil
 }

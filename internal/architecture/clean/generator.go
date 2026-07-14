@@ -28,7 +28,7 @@ const (
 var commonFolders = map[string][]string{
 	layerDomain:         {"Entities", "Enums", "Exceptions", "Interfaces", "ValueObjects"},
 	layerApplication:    {"Interfaces", "Services", "DTOs", "Mappings"},
-	layerInfrastructure: {"Persistence", "Services", "DependencyInjection"},
+	layerInfrastructure: {"Persistence", "Services"},
 }
 
 // efCorePackages maps a DatabaseType to the NuGet package(s) required for
@@ -133,28 +133,28 @@ func (g *Generator) Generate(ctx context.Context, options models.ProjectOptions)
 
 	g.onProgress("Building Domain project")
 	domainName := options.Name + "." + layerDomain
-	domainPath, err := g.projectBuilder.BuildClassLibrary(ctx, domainName, g.fs.Join(root, layerDomain))
+	domainPath, err := g.projectBuilder.BuildClassLibrary(ctx, domainName, g.fs.Join(root, "src", domainName))
 	if err != nil {
 		return fmt.Errorf("clean: failed to build domain project: %w", err)
 	}
 
 	g.onProgress("Building Application project")
 	applicationName := options.Name + "." + layerApplication
-	applicationPath, err := g.projectBuilder.BuildClassLibrary(ctx, applicationName, g.fs.Join(root, layerApplication))
+	applicationPath, err := g.projectBuilder.BuildClassLibrary(ctx, applicationName, g.fs.Join(root, "src", applicationName))
 	if err != nil {
 		return fmt.Errorf("clean: failed to build application project: %w", err)
 	}
 
 	g.onProgress("Building Infrastructure project")
 	infrastructureName := options.Name + "." + layerInfrastructure
-	infrastructurePath, err := g.projectBuilder.BuildClassLibrary(ctx, infrastructureName, g.fs.Join(root, layerInfrastructure))
+	infrastructurePath, err := g.projectBuilder.BuildClassLibrary(ctx, infrastructureName, g.fs.Join(root, "src", infrastructureName))
 	if err != nil {
 		return fmt.Errorf("clean: failed to build infrastructure project: %w", err)
 	}
 
 	g.onProgress(fmt.Sprintf("Building Presentation project (%s)", options.Presentation))
-	presentationName := options.Name + ".Presentation"
-	presentationDir := g.fs.Join(root, "Presentation")
+	presentationName := options.Name + "." + string(options.Presentation)
+	presentationDir := g.fs.Join(root, "src", presentationName)
 
 	var presentationPath string
 	switch options.Presentation {
@@ -200,7 +200,8 @@ func (g *Generator) Generate(ctx context.Context, options models.ProjectOptions)
 		if !ok {
 			continue
 		}
-		if err := g.folderBuilder.CreateFolders(ctx, g.fs.Join(root, layer), folders); err != nil {
+		projectName := options.Name + "." + layer
+		if err := g.folderBuilder.CreateFolders(ctx, g.fs.Join(root, "src", projectName), folders); err != nil {
 			return fmt.Errorf("clean: failed to create %s folders: %w", layer, err)
 		}
 	}
@@ -227,7 +228,7 @@ func (g *Generator) Generate(ctx context.Context, options models.ProjectOptions)
 	if err := g.templateRenderer.RenderToFile(
 		"infrastructure/AppDbContext.cs.tmpl",
 		options,
-		g.fs.Join(root, layerInfrastructure, "Persistence", "AppDbContext.cs"),
+		g.fs.Join(root, "src", infrastructureName, "Persistence", "AppDbContext.cs"),
 	); err != nil {
 		return fmt.Errorf("clean: failed to render AppDbContext: %w", err)
 	}
@@ -235,7 +236,7 @@ func (g *Generator) Generate(ctx context.Context, options models.ProjectOptions)
 	if err := g.templateRenderer.RenderToFile(
 		"infrastructure/DependencyInjection.cs.tmpl",
 		options,
-		g.fs.Join(root, layerInfrastructure, "DependencyInjection", "DependencyInjection.cs"),
+		g.fs.Join(root, "src", infrastructureName, "DependencyInjection.cs"),
 	); err != nil {
 		return fmt.Errorf("clean: failed to render DependencyInjection: %w", err)
 	}
@@ -243,7 +244,7 @@ func (g *Generator) Generate(ctx context.Context, options models.ProjectOptions)
 	if err := g.templateRenderer.RenderToFile(
 		"application/DependencyInjection.cs.tmpl",
 		options,
-		g.fs.Join(root, layerApplication, "DependencyInjection", "DependencyInjection.cs"),
+		g.fs.Join(root, "src", applicationName, "DependencyInjection.cs"),
 	); err != nil {
 		return fmt.Errorf("clean: failed to render DependencyInjection: %w", err)
 	}
@@ -252,7 +253,7 @@ func (g *Generator) Generate(ctx context.Context, options models.ProjectOptions)
 	if options.Presentation == models.PresentationWebApp {
 		programTemplate = "webapp/Program.cs.tmpl"
 	}
-	if err := g.templateRenderer.RenderToFile(programTemplate, options, g.fs.Join(root, "Presentation", "Program.cs")); err != nil {
+	if err := g.templateRenderer.RenderToFile(programTemplate, options, g.fs.Join(root, "src", presentationName, "Program.cs")); err != nil {
 		return fmt.Errorf("clean: failed to render Program.cs: %w", err)
 	}
 
