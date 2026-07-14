@@ -1,0 +1,19 @@
+// This is a Go text/template file (.tmpl), rendered by internal/templates
+// via the "TemplateRenderer" builder. {{ .Name }}, {{ .Presentation }}, and
+// {{ .Database }} are populated from models.ProjectOptions.
+//
+// Generation logic that calls this template is implemented in
+// internal/architecture/clean/generator.go, but is not yet wired up to the
+// `arch create` command (Phase 1 scope is CLI-only).
+
+using {{ .Name }}.Infrastructure.DependencyInjection;
+
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddControllers();
+
+var app = builder.Build();
+
+app.MapControllers();
+app.Run();

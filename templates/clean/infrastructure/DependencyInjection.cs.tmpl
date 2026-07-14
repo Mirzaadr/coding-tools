@@ -1,0 +1,19 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace {{ .Name }}.Infrastructure.DependencyInjection;
+
+public static class DependencyInjection
+{
+    public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddDbContext<Persistence.AppDbContext>(options =>
+        {
+            // Database provider: {{ .Database }}
+            // Connection string wiring is implemented in a later phase.
+        });
+
+        return services;
+    }
+}

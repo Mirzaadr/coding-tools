@@ -1,0 +1,267 @@
+// Package clean implements the Clean Architecture ArchitectureGenerator.
+// It contains no dotnet/os/exec calls of its own - it only orchestrates
+// the shared builders package.
+package clean
+
+import (
+	"context"
+	"fmt"
+	"log/slog"
+
+	"github.com/andre/dotnet-architect/internal/architecture"
+	"github.com/andre/dotnet-architect/internal/builders"
+	"github.com/andre/dotnet-architect/internal/dotnet"
+	"github.com/andre/dotnet-architect/internal/filesystem"
+	"github.com/andre/dotnet-architect/internal/models"
+)
+
+// project layer names, used both as project name suffixes and as solution
+// folders.
+const (
+	layerDomain         = "Domain"
+	layerApplication    = "Application"
+	layerInfrastructure = "Infrastructure"
+)
+
+// commonFolders are created inside each layer project as part of the
+// conventional Clean Architecture folder layout.
+var commonFolders = map[string][]string{
+	layerDomain:         {"Entities", "Enums", "Exceptions", "Interfaces", "ValueObjects"},
+	layerApplication:    {"Interfaces", "Services", "DTOs", "Mappings"},
+	layerInfrastructure: {"Persistence", "Services", "DependencyInjection"},
+}
+
+// efCorePackages maps a DatabaseType to the NuGet package(s) required for
+// EF Core to talk to it.
+var efCorePackages = map[models.DatabaseType]map[string]string{
+	models.DatabasePostgreSQL: {"Npgsql.EntityFrameworkCore.PostgreSQL": ""},
+	models.DatabaseSqlServer:  {"Microsoft.EntityFrameworkCore.SqlServer": ""},
+}
+
+// Generator implements architecture.ArchitectureGenerator for Clean
+// Architecture. All dependencies are injected explicitly via the
+// constructor - no globals, no service locator.
+type Generator struct {
+	solutionBuilder  builders.SolutionBuilder
+	projectBuilder   builders.ProjectBuilder
+	referenceBuilder builders.ReferenceBuilder
+	folderBuilder    builders.FolderBuilder
+	packageInstaller builders.PackageInstaller
+	templateRenderer builders.TemplateRenderer
+	fs               filesystem.FileSystem
+	dotnetClient     dotnet.Dotnet
+	logger           *slog.Logger
+	onProgress       architecture.ProgressFunc
+}
+
+// NewGenerator constructs a Clean Architecture Generator from its
+// collaborators. onProgress may be nil, in which case progress reporting
+// is a no-op.
+func NewGenerator(
+	solutionBuilder builders.SolutionBuilder,
+	projectBuilder builders.ProjectBuilder,
+	referenceBuilder builders.ReferenceBuilder,
+	folderBuilder builders.FolderBuilder,
+	packageInstaller builders.PackageInstaller,
+	templateRenderer builders.TemplateRenderer,
+	fs filesystem.FileSystem,
+	dotnetClient dotnet.Dotnet,
+	logger *slog.Logger,
+	onProgress architecture.ProgressFunc,
+) *Generator {
+	if onProgress == nil {
+		onProgress = func(string) {} // no-op default
+	}
+	return &Generator{
+		solutionBuilder:  solutionBuilder,
+		projectBuilder:   projectBuilder,
+		referenceBuilder: referenceBuilder,
+		folderBuilder:    folderBuilder,
+		packageInstaller: packageInstaller,
+		templateRenderer: templateRenderer,
+		fs:               fs,
+		dotnetClient:     dotnetClient,
+		logger:           logger,
+		onProgress:       onProgress,
+	}
+}
+
+// Name identifies this generator in the architecture.Registry.
+func (g *Generator) Name() models.ArchitectureType {
+	return models.ArchitectureClean
+}
+
+// Generate produces a Clean Architecture solution on disk:
+//
+//	Solution
+//	├── Domain
+//	├── Application
+//	├── Infrastructure
+//	└── Presentation (WebApi or WebApp)
+//
+// with project references wired Presentation -> Application -> Domain and
+// Infrastructure -> Application/Domain, EF Core packages installed based on
+// options.Database, and a final restore/build unless options.Build is false.
+//
+// NOTE: this is the full intended behavior for a future phase. It is not
+// yet invoked by the `arch create` command, which today only resolves and
+// prints the configuration (see internal/services and the create command).
+func (g *Generator) Generate(ctx context.Context, options models.ProjectOptions) error {
+	root := options.OutputPath
+	if options.CreateProjectFolder {
+		root = g.fs.Join(options.OutputPath, options.Name)
+	}
+
+	g.onProgress("Preparing output directory")
+	if err := g.folderBuilder.CreateFolders(ctx, root, []string{}); err != nil {
+		return fmt.Errorf("clean: failed to prepare root directory: %w", err)
+	}
+
+	g.onProgress("Creating solution")
+	if err := g.solutionBuilder.Build(ctx, options.Name, root); err != nil {
+		return fmt.Errorf("clean: failed to build solution: %w", err)
+	}
+
+	solutionPath := g.fs.Join(root, options.Name+".sln")
+	if !g.fs.Exists(solutionPath) {
+		solutionPath = g.fs.Join(root, options.Name+".slnx")
+	}
+
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("clean: cancelled: %w", err)
+	}
+
+	g.onProgress("Building Domain project")
+	domainName := options.Name + "." + layerDomain
+	domainPath, err := g.projectBuilder.BuildClassLibrary(ctx, domainName, g.fs.Join(root, layerDomain))
+	if err != nil {
+		return fmt.Errorf("clean: failed to build domain project: %w", err)
+	}
+
+	g.onProgress("Building Application project")
+	applicationName := options.Name + "." + layerApplication
+	applicationPath, err := g.projectBuilder.BuildClassLibrary(ctx, applicationName, g.fs.Join(root, layerApplication))
+	if err != nil {
+		return fmt.Errorf("clean: failed to build application project: %w", err)
+	}
+
+	g.onProgress("Building Infrastructure project")
+	infrastructureName := options.Name + "." + layerInfrastructure
+	infrastructurePath, err := g.projectBuilder.BuildClassLibrary(ctx, infrastructureName, g.fs.Join(root, layerInfrastructure))
+	if err != nil {
+		return fmt.Errorf("clean: failed to build infrastructure project: %w", err)
+	}
+
+	g.onProgress(fmt.Sprintf("Building Presentation project (%s)", options.Presentation))
+	presentationName := options.Name + ".Presentation"
+	presentationDir := g.fs.Join(root, "Presentation")
+
+	var presentationPath string
+	switch options.Presentation {
+	case models.PresentationWebApi:
+		presentationPath, err = g.projectBuilder.BuildWebApi(ctx, presentationName, presentationDir)
+	case models.PresentationWebApp:
+		presentationPath, err = g.projectBuilder.BuildMvc(ctx, presentationName, presentationDir)
+	default:
+		return fmt.Errorf("clean: unsupported presentation type %q", options.Presentation)
+	}
+	if err != nil {
+		return fmt.Errorf("clean: failed to build presentation project: %w", err)
+	}
+
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("clean: cancelled: %w", err)
+	}
+
+	g.onProgress("Adding projects to solution")
+	for _, projectPath := range []string{domainPath, applicationPath, infrastructurePath, presentationPath} {
+		if err := g.referenceBuilder.AddProjectToSolution(ctx, solutionPath, projectPath); err != nil {
+			return fmt.Errorf("clean: failed to add %q to solution: %w", projectPath, err)
+		}
+	}
+
+	g.onProgress("Wiring project references")
+	if err := g.referenceBuilder.AddProjectReference(ctx, applicationPath, domainPath); err != nil {
+		return fmt.Errorf("clean: failed to reference Domain from Application: %w", err)
+	}
+	if err := g.referenceBuilder.AddProjectReference(ctx, infrastructurePath, applicationPath); err != nil {
+		return fmt.Errorf("clean: failed to reference Application from Infrastructure: %w", err)
+	}
+	if err := g.referenceBuilder.AddProjectReference(ctx, presentationPath, applicationPath); err != nil {
+		return fmt.Errorf("clean: failed to reference Application from Presentation: %w", err)
+	}
+	if err := g.referenceBuilder.AddProjectReference(ctx, presentationPath, infrastructurePath); err != nil {
+		return fmt.Errorf("clean: failed to reference Infrastructure from Presentation: %w", err)
+	}
+
+	g.onProgress("Creating conventional folder layout")
+	for _, layer := range []string{layerDomain, layerApplication, layerInfrastructure} {
+		folders, ok := commonFolders[layer]
+		if !ok {
+			continue
+		}
+		if err := g.folderBuilder.CreateFolders(ctx, g.fs.Join(root, layer), folders); err != nil {
+			return fmt.Errorf("clean: failed to create %s folders: %w", layer, err)
+		}
+	}
+
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("clean: cancelled: %w", err)
+	}
+
+	g.onProgress(fmt.Sprintf("Installing EF Core packages (%s)", options.Database))
+	packages, ok := efCorePackages[options.Database]
+	if !ok {
+		return fmt.Errorf("clean: unsupported database type %q", options.Database)
+	}
+	if err := g.packageInstaller.InstallPackages(ctx, infrastructurePath, packages); err != nil {
+		return fmt.Errorf("clean: failed to install EF Core packages: %w", err)
+	}
+
+	g.onProgress("Rendering boilerplate files")
+	if err := g.templateRenderer.RenderToFile(
+		"infrastructure/AppDbContext.cs.tmpl",
+		options,
+		g.fs.Join(root, layerInfrastructure, "Persistence", "AppDbContext.cs"),
+	); err != nil {
+		return fmt.Errorf("clean: failed to render AppDbContext: %w", err)
+	}
+
+	if err := g.templateRenderer.RenderToFile(
+		"infrastructure/DependencyInjection.cs.tmpl",
+		options,
+		g.fs.Join(root, layerInfrastructure, "DependencyInjection", "DependencyInjection.cs"),
+	); err != nil {
+		return fmt.Errorf("clean: failed to render DependencyInjection: %w", err)
+	}
+
+	if err := g.templateRenderer.RenderToFile(
+		"api/Program.cs.tmpl",
+		options,
+		g.fs.Join(root, "Presentation", "Program.cs"),
+	); err != nil {
+		return fmt.Errorf("clean: failed to render Program.cs: %w", err)
+	}
+
+	if !options.Build {
+		g.onProgress("Skipping restore/build (--no-build set)")
+		return nil
+	}
+
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("clean: cancelled: %w", err)
+	}
+
+	g.onProgress("Restoring NuGet packages")
+	if _, err := g.dotnetClient.Restore(ctx, solutionPath); err != nil {
+		return fmt.Errorf("clean: failed to restore solution: %w", err)
+	}
+
+	g.onProgress("Building solution")
+	if _, err := g.dotnetClient.Build(ctx, solutionPath); err != nil {
+		return fmt.Errorf("clean: failed to build solution: %w", err)
+	}
+
+	g.onProgress("Done")
+	return nil
+}
