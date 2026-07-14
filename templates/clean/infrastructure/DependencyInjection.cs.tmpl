@@ -8,11 +8,10 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddDbContext<Persistence.AppDbContext>(options =>
-        {
-            // Database provider: {{ .Database }}
-            // Connection string wiring is implemented in a later phase.
-        });
+        services.AddDbContext<Persistence.AppDbContext>(options => {
+        {{ if eq .Database "PostgreSQL" }}    options.UseNpgsql(configuration.GetConnectionString("DefaultConnection"));
+        {{ else if eq .Database "SqlServer" }}    options.UseSqlServer(configuration.GetConnectionString("DefaultConnection"));
+        {{ end }}});
 
         return services;
     }

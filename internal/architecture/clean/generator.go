@@ -218,6 +218,11 @@ func (g *Generator) Generate(ctx context.Context, options models.ProjectOptions)
 		return fmt.Errorf("clean: failed to install EF Core packages: %w", err)
 	}
 
+	g.onProgress("Installing Mediatr packages")
+	if err := g.packageInstaller.InstallPackage(ctx, applicationPath, "MediatR", "12.5.0"); err != nil {
+		return fmt.Errorf("clean: failed to install Mediatr packages: %w", err)
+	}
+
 	g.onProgress("Rendering boilerplate files")
 	if err := g.templateRenderer.RenderToFile(
 		"infrastructure/AppDbContext.cs.tmpl",
@@ -236,10 +241,18 @@ func (g *Generator) Generate(ctx context.Context, options models.ProjectOptions)
 	}
 
 	if err := g.templateRenderer.RenderToFile(
-		"api/Program.cs.tmpl",
+		"application/DependencyInjection.cs.tmpl",
 		options,
-		g.fs.Join(root, "Presentation", "Program.cs"),
+		g.fs.Join(root, layerApplication, "DependencyInjection", "DependencyInjection.cs"),
 	); err != nil {
+		return fmt.Errorf("clean: failed to render DependencyInjection: %w", err)
+	}
+
+	programTemplate := "api/Program.cs.tmpl"
+	if options.Presentation == models.PresentationWebApp {
+		programTemplate = "webapp/Program.cs.tmpl"
+	}
+	if err := g.templateRenderer.RenderToFile(programTemplate, options, g.fs.Join(root, "Presentation", "Program.cs")); err != nil {
 		return fmt.Errorf("clean: failed to render Program.cs: %w", err)
 	}
 
