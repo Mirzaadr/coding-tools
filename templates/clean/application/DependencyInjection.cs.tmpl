@@ -1,5 +1,8 @@
 using Microsoft.Extensions.DependencyInjection;
 
+using {{ .Name }}.Application.Services;
+using {{ .Name }}.Application.Interfaces;
+
 namespace {{ .Name }}.Application.DependencyInjection;
 
 public static class DependencyInjection
@@ -10,6 +13,8 @@ public static class DependencyInjection
         {
             config.RegisterServicesFromAssembly(typeof(DependencyInjection).Assembly);
         });
+
+        services.AddScoped<IWeatherForecastService, WeatherForecastService>();
 
         return services;
     }

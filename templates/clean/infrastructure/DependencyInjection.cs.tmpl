@@ -2,16 +2,27 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
+using {{ .Name }}.Domain.Interfaces;
+using {{ .Name }}.Infrastructure.Persistence.Repositories;
+
 namespace {{ .Name }}.Infrastructure.DependencyInjection;
 
 public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddDbContext<Persistence.AppDbContext>(options => {
-        {{ if eq .Database "PostgreSQL" }}    options.UseNpgsql(configuration.GetConnectionString("DefaultConnection"));
-        {{ else if eq .Database "SqlServer" }}    options.UseSqlServer(configuration.GetConnectionString("DefaultConnection"));
-        {{ end }}});
+        services.AddDbContext<Persistence.AppDbContext>(options => 
+        {
+            // --- Real provider ({{ .Database }}) - uncomment when ready to connect to a real database ---
+            //  var connectionString = configuration.GetConnectionString("DefaultConnection");
+            {{ if eq .Database "PostgreSQL" }}//     options.UseNpgsql(connectionString);
+            {{ else if eq .Database "SqlServer" }}//     options.UseSqlServer(connectionString);
+            {{ end }}
+            // --- In-memory provider (active by default so the project runs without a real DB) ---
+            options.UseInMemoryDatabase("{{ .Name }}Db");
+        });
+
+        services.AddScoped<IWeatherForecastRepository, WeatherForecastRepository>();
 
         return services;
     }

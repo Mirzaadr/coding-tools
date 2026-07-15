@@ -1,0 +1,14 @@
+{
+  "ConnectionStrings": {
+    {{ if eq .Database "PostgreSQL" }}"DefaultConnection": "Host=localhost;Port=5432;Database={{ .Name }};Username=postgres;Password=postgres"
+    {{ else if eq .Database "SqlServer" }}"DefaultConnection": "Server=localhost;Database={{ .Name }};Trusted_Connection=True;TrustServerCertificate=True"
+    {{ end }}
+  },
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  },
+  "AllowedHosts": "*"
+}

@@ -218,6 +218,9 @@ func (g *Generator) Generate(ctx context.Context, options models.ProjectOptions)
 	if err := g.packageInstaller.InstallPackages(ctx, infrastructurePath, packages); err != nil {
 		return fmt.Errorf("clean: failed to install EF Core packages: %w", err)
 	}
+	if err := g.packageInstaller.InstallPackage(ctx, infrastructurePath, "Microsoft.EntityFrameworkCore.InMemory", ""); err != nil {
+		return fmt.Errorf("clean: failed to install EF Core InMemory package: %w", err)
+	}
 
 	g.onProgress("Installing Mediatr packages")
 	if err := g.packageInstaller.InstallPackage(ctx, applicationPath, "MediatR", "12.5.0"); err != nil {
@@ -255,6 +258,14 @@ func (g *Generator) Generate(ctx context.Context, options models.ProjectOptions)
 	}
 	if err := g.templateRenderer.RenderToFile(programTemplate, options, g.fs.Join(root, "src", presentationName, "Program.cs")); err != nil {
 		return fmt.Errorf("clean: failed to render Program.cs: %w", err)
+	}
+
+	if err := g.templateRenderer.RenderToFile(
+		"api/appsettings.json.tmpl",
+		options,
+		g.fs.Join(root, "src", presentationName, "appsettings.json"),
+	); err != nil {
+		return fmt.Errorf("clean: failed to render appsettings.json: %w", err)
 	}
 
 	if err := g.renderCrudExample(root, options); err != nil {
