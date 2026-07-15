@@ -1,0 +1,30 @@
+using {{ .Name }}.Application.DTOs;
+using {{ .Name }}.Domain.Entities;
+
+namespace {{ .Name }}.Application.Mappings;
+
+/// <summary>
+/// Deliberately hand-written rather than pulled in via AutoMapper/Mapster -
+/// keeps the generated project dependency-free until you decide you want a
+/// mapping library. Swap this out freely.
+/// </summary>
+public static class WeatherForecastMappingExtensions
+{
+    public static WeatherForecastDto ToDto(this WeatherForecast entity) =>
+        new(entity.Id, entity.Date, entity.TemperatureC, entity.TemperatureF, entity.Summary);
+
+    public static WeatherForecast ToEntity(this CreateWeatherForecastDto dto) =>
+        new()
+        {
+            Date = dto.Date,
+            TemperatureC = dto.TemperatureC,
+            Summary = dto.Summary,
+        };
+
+    public static void ApplyUpdate(this WeatherForecast entity, UpdateWeatherForecastDto dto)
+    {
+        entity.Date = dto.Date;
+        entity.TemperatureC = dto.TemperatureC;
+        entity.Summary = dto.Summary;
+    }
+}

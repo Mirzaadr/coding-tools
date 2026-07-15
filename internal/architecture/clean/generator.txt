@@ -28,7 +28,7 @@ const (
 var commonFolders = map[string][]string{
 	layerDomain:         {"Entities", "Enums", "Exceptions", "Interfaces", "ValueObjects"},
 	layerApplication:    {"Interfaces", "Services", "DTOs", "Mappings"},
-	layerInfrastructure: {"Persistence", "Services"},
+	layerInfrastructure: {"Persistence", "Services", "DependencyInjection"},
 }
 
 // efCorePackages maps a DatabaseType to the NuGet package(s) required for
@@ -70,7 +70,7 @@ func NewGenerator(
 	onProgress architecture.ProgressFunc,
 ) *Generator {
 	if onProgress == nil {
-		onProgress = func(string) {} // no-op default
+		onProgress = func(string) {}
 	}
 	return &Generator{
 		solutionBuilder:  solutionBuilder,
@@ -123,9 +123,6 @@ func (g *Generator) Generate(ctx context.Context, options models.ProjectOptions)
 	}
 
 	solutionPath := g.fs.Join(root, options.Name+".sln")
-	if !g.fs.Exists(solutionPath) {
-		solutionPath = g.fs.Join(root, options.Name+".slnx")
-	}
 
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("clean: cancelled: %w", err)
@@ -133,28 +130,28 @@ func (g *Generator) Generate(ctx context.Context, options models.ProjectOptions)
 
 	g.onProgress("Building Domain project")
 	domainName := options.Name + "." + layerDomain
-	domainPath, err := g.projectBuilder.BuildClassLibrary(ctx, domainName, g.fs.Join(root, "src", domainName))
+	domainPath, err := g.projectBuilder.BuildClassLibrary(ctx, domainName, g.fs.Join(root, layerDomain))
 	if err != nil {
 		return fmt.Errorf("clean: failed to build domain project: %w", err)
 	}
 
 	g.onProgress("Building Application project")
 	applicationName := options.Name + "." + layerApplication
-	applicationPath, err := g.projectBuilder.BuildClassLibrary(ctx, applicationName, g.fs.Join(root, "src", applicationName))
+	applicationPath, err := g.projectBuilder.BuildClassLibrary(ctx, applicationName, g.fs.Join(root, layerApplication))
 	if err != nil {
 		return fmt.Errorf("clean: failed to build application project: %w", err)
 	}
 
 	g.onProgress("Building Infrastructure project")
 	infrastructureName := options.Name + "." + layerInfrastructure
-	infrastructurePath, err := g.projectBuilder.BuildClassLibrary(ctx, infrastructureName, g.fs.Join(root, "src", infrastructureName))
+	infrastructurePath, err := g.projectBuilder.BuildClassLibrary(ctx, infrastructureName, g.fs.Join(root, layerInfrastructure))
 	if err != nil {
 		return fmt.Errorf("clean: failed to build infrastructure project: %w", err)
 	}
 
 	g.onProgress(fmt.Sprintf("Building Presentation project (%s)", options.Presentation))
-	presentationName := options.Name + "." + string(options.Presentation)
-	presentationDir := g.fs.Join(root, "src", presentationName)
+	presentationName := options.Name + ".Presentation"
+	presentationDir := g.fs.Join(root, "Presentation")
 
 	var presentationPath string
 	switch options.Presentation {
@@ -200,8 +197,7 @@ func (g *Generator) Generate(ctx context.Context, options models.ProjectOptions)
 		if !ok {
 			continue
 		}
-		projectName := options.Name + "." + layer
-		if err := g.folderBuilder.CreateFolders(ctx, g.fs.Join(root, "src", projectName), folders); err != nil {
+		if err := g.folderBuilder.CreateFolders(ctx, g.fs.Join(root, layer), folders); err != nil {
 			return fmt.Errorf("clean: failed to create %s folders: %w", layer, err)
 		}
 	}
@@ -219,16 +215,11 @@ func (g *Generator) Generate(ctx context.Context, options models.ProjectOptions)
 		return fmt.Errorf("clean: failed to install EF Core packages: %w", err)
 	}
 
-	g.onProgress("Installing Mediatr packages")
-	if err := g.packageInstaller.InstallPackage(ctx, applicationPath, "MediatR", "12.5.0"); err != nil {
-		return fmt.Errorf("clean: failed to install Mediatr packages: %w", err)
-	}
-
 	g.onProgress("Rendering boilerplate files")
 	if err := g.templateRenderer.RenderToFile(
 		"infrastructure/AppDbContext.cs.tmpl",
 		options,
-		g.fs.Join(root, "src", infrastructureName, "Persistence", "AppDbContext.cs"),
+		g.fs.Join(root, layerInfrastructure, "Persistence", "AppDbContext.cs"),
 	); err != nil {
 		return fmt.Errorf("clean: failed to render AppDbContext: %w", err)
 	}
@@ -236,24 +227,16 @@ func (g *Generator) Generate(ctx context.Context, options models.ProjectOptions)
 	if err := g.templateRenderer.RenderToFile(
 		"infrastructure/DependencyInjection.cs.tmpl",
 		options,
-		g.fs.Join(root, "src", infrastructureName, "DependencyInjection.cs"),
+		g.fs.Join(root, layerInfrastructure, "DependencyInjection", "DependencyInjection.cs"),
 	); err != nil {
 		return fmt.Errorf("clean: failed to render DependencyInjection: %w", err)
 	}
 
 	if err := g.templateRenderer.RenderToFile(
-		"application/DependencyInjection.cs.tmpl",
+		"api/Program.cs.tmpl",
 		options,
-		g.fs.Join(root, "src", applicationName, "DependencyInjection.cs"),
+		g.fs.Join(root, "Presentation", "Program.cs"),
 	); err != nil {
-		return fmt.Errorf("clean: failed to render DependencyInjection: %w", err)
-	}
-
-	programTemplate := "api/Program.cs.tmpl"
-	if options.Presentation == models.PresentationWebApp {
-		programTemplate = "webapp/Program.cs.tmpl"
-	}
-	if err := g.templateRenderer.RenderToFile(programTemplate, options, g.fs.Join(root, "src", presentationName, "Program.cs")); err != nil {
 		return fmt.Errorf("clean: failed to render Program.cs: %w", err)
 	}
 
@@ -293,26 +276,23 @@ func (g *Generator) Generate(ctx context.Context, options models.ProjectOptions)
 // The Presentation-layer controller is handled separately in
 // renderCrudExample, since it currently only has a WebApi-flavored
 // template (see templates/clean/api/controllers).
-func crudExampleTemplates(root string, name string, fs filesystem.FileSystem) []struct {
+func crudExampleTemplates(root string, fs filesystem.FileSystem) []struct {
 	template    string
 	destination string
 } {
-	domainName := name + "." + layerDomain
-	applicationName := name + "." + layerApplication
-	infrastructureName := name + "." + layerInfrastructure
 	return []struct {
 		template    string
 		destination string
 	}{
-		{"domain/entities/WeatherForecast.cs.tmpl", fs.Join(root, "src", domainName, "Entities", "WeatherForecast.cs")},
-		{"domain/interfaces/IWeatherForecastRepository.cs.tmpl", fs.Join(root, "src", domainName, "Interfaces", "IWeatherForecastRepository.cs")},
-		{"application/dtos/WeatherForecastDto.cs.tmpl", fs.Join(root, "src", applicationName, "DTOs", "WeatherForecastDto.cs")},
-		{"application/dtos/CreateWeatherForecastDto.cs.tmpl", fs.Join(root, "src", applicationName, "DTOs", "CreateWeatherForecastDto.cs")},
-		{"application/dtos/UpdateWeatherForecastDto.cs.tmpl", fs.Join(root, "src", applicationName, "DTOs", "UpdateWeatherForecastDto.cs")},
-		{"application/mappings/WeatherForecastMappingExtensions.cs.tmpl", fs.Join(root, "src", applicationName, "Mappings", "WeatherForecastMappingExtensions.cs")},
-		{"application/interfaces/IWeatherForecastService.cs.tmpl", fs.Join(root, "src", applicationName, "Interfaces", "IWeatherForecastService.cs")},
-		{"application/services/WeatherForecastService.cs.tmpl", fs.Join(root, "src", applicationName, "Services", "WeatherForecastService.cs")},
-		{"infrastructure/persistence/repositories/WeatherForecastRepository.cs.tmpl", fs.Join(root, "src", infrastructureName, "Persistence", "Repositories", "WeatherForecastRepository.cs")},
+		{"domain/entities/WeatherForecast.cs.tmpl", fs.Join(root, layerDomain, "Entities", "WeatherForecast.cs")},
+		{"domain/interfaces/IWeatherForecastRepository.cs.tmpl", fs.Join(root, layerDomain, "Interfaces", "IWeatherForecastRepository.cs")},
+		{"application/dtos/WeatherForecastDto.cs.tmpl", fs.Join(root, layerApplication, "DTOs", "WeatherForecastDto.cs")},
+		{"application/dtos/CreateWeatherForecastDto.cs.tmpl", fs.Join(root, layerApplication, "DTOs", "CreateWeatherForecastDto.cs")},
+		{"application/dtos/UpdateWeatherForecastDto.cs.tmpl", fs.Join(root, layerApplication, "DTOs", "UpdateWeatherForecastDto.cs")},
+		{"application/mappings/WeatherForecastMappingExtensions.cs.tmpl", fs.Join(root, layerApplication, "Mappings", "WeatherForecastMappingExtensions.cs")},
+		{"application/interfaces/IWeatherForecastService.cs.tmpl", fs.Join(root, layerApplication, "Interfaces", "IWeatherForecastService.cs")},
+		{"application/services/WeatherForecastService.cs.tmpl", fs.Join(root, layerApplication, "Services", "WeatherForecastService.cs")},
+		{"infrastructure/persistence/repositories/WeatherForecastRepository.cs.tmpl", fs.Join(root, layerInfrastructure, "Persistence", "Repositories", "WeatherForecastRepository.cs")},
 	}
 }
 
@@ -325,19 +305,18 @@ func crudExampleTemplates(root string, name string, fs filesystem.FileSystem) []
 func (g *Generator) renderCrudExample(root string, options models.ProjectOptions) error {
 	g.onProgress("Rendering CRUD example (WeatherForecast)")
 
-	for _, file := range crudExampleTemplates(root, options.Name, g.fs) {
+	for _, file := range crudExampleTemplates(root, g.fs) {
 		if err := g.templateRenderer.RenderToFile(file.template, options, file.destination); err != nil {
 			return fmt.Errorf("clean: failed to render %s: %w", file.template, err)
 		}
 	}
 
-	presentationName := options.Name + "." + string(options.Presentation)
 	switch options.Presentation {
 	case models.PresentationWebApi:
 		if err := g.templateRenderer.RenderToFile(
 			"api/controllers/WeatherForecastsController.cs.tmpl",
 			options,
-			g.fs.Join(root, "src", presentationName, "Controllers", "WeatherForecastsController.cs"),
+			g.fs.Join(root, "Presentation", "Controllers", "WeatherForecastsController.cs"),
 		); err != nil {
 			return fmt.Errorf("clean: failed to render WeatherForecastsController: %w", err)
 		}

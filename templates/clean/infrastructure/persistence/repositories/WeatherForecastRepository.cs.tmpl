@@ -1,0 +1,31 @@
+using Microsoft.EntityFrameworkCore;
+using {{ .Name }}.Domain.Entities;
+using {{ .Name }}.Domain.Interfaces;
+
+namespace {{ .Name }}.Infrastructure.Persistence.Repositories;
+
+public class WeatherForecastRepository : IWeatherForecastRepository
+{
+    private readonly AppDbContext _context;
+
+    public WeatherForecastRepository(AppDbContext context)
+    {
+        _context = context;
+    }
+
+    public async Task<IReadOnlyList<WeatherForecast>> GetAllAsync(CancellationToken cancellationToken = default) =>
+        await _context.WeatherForecasts.AsNoTracking().ToListAsync(cancellationToken);
+
+    public async Task<WeatherForecast?> GetByIdAsync(int id, CancellationToken cancellationToken = default) =>
+        await _context.WeatherForecasts.FindAsync(new object?[] { id }, cancellationToken);
+
+    public async Task AddAsync(WeatherForecast forecast, CancellationToken cancellationToken = default) =>
+        await _context.WeatherForecasts.AddAsync(forecast, cancellationToken);
+
+    public void Update(WeatherForecast forecast) => _context.WeatherForecasts.Update(forecast);
+
+    public void Remove(WeatherForecast forecast) => _context.WeatherForecasts.Remove(forecast);
+
+    public async Task<bool> SaveChangesAsync(CancellationToken cancellationToken = default) =>
+        await _context.SaveChangesAsync(cancellationToken) >= 0;
+}

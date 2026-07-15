@@ -1,0 +1,51 @@
+using Microsoft.AspNetCore.Mvc;
+using {{ .Name }}.Application.DTOs;
+using {{ .Name }}.Application.Interfaces;
+
+namespace {{ .Name }}.Presentation.Controllers;
+
+[ApiController]
+[Route("api/[controller]")]
+public class WeatherForecastsController : ControllerBase
+{
+    private readonly IWeatherForecastService _service;
+
+    public WeatherForecastsController(IWeatherForecastService service)
+    {
+        _service = service;
+    }
+
+    [HttpGet]
+    public async Task<ActionResult<IReadOnlyList<WeatherForecastDto>>> GetAll(CancellationToken cancellationToken)
+    {
+        return Ok(await _service.GetAllAsync(cancellationToken));
+    }
+
+    [HttpGet("{id:int}")]
+    public async Task<ActionResult<WeatherForecastDto>> GetById(int id, CancellationToken cancellationToken)
+    {
+        var forecast = await _service.GetByIdAsync(id, cancellationToken);
+        return forecast is null ? NotFound() : Ok(forecast);
+    }
+
+    [HttpPost]
+    public async Task<ActionResult<WeatherForecastDto>> Create(CreateWeatherForecastDto dto, CancellationToken cancellationToken)
+    {
+        var created = await _service.CreateAsync(dto, cancellationToken);
+        return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
+    }
+
+    [HttpPut("{id:int}")]
+    public async Task<IActionResult> Update(int id, UpdateWeatherForecastDto dto, CancellationToken cancellationToken)
+    {
+        var updated = await _service.UpdateAsync(id, dto, cancellationToken);
+        return updated ? NoContent() : NotFound();
+    }
+
+    [HttpDelete("{id:int}")]
+    public async Task<IActionResult> Delete(int id, CancellationToken cancellationToken)
+    {
+        var deleted = await _service.DeleteAsync(id, cancellationToken);
+        return deleted ? NoContent() : NotFound();
+    }
+}

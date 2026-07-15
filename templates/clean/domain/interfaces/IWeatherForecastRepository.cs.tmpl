@@ -1,0 +1,23 @@
+using {{ .Name }}.Domain.Entities;
+
+namespace {{ .Name }}.Domain.Interfaces;
+
+/// <summary>
+/// Repository abstraction for WeatherForecast, defined in Domain and
+/// implemented in Infrastructure - Application and Domain depend only on
+/// this interface, never on EF Core directly.
+/// </summary>
+public interface IWeatherForecastRepository
+{
+    Task<IReadOnlyList<WeatherForecast>> GetAllAsync(CancellationToken cancellationToken = default);
+
+    Task<WeatherForecast?> GetByIdAsync(int id, CancellationToken cancellationToken = default);
+
+    Task AddAsync(WeatherForecast forecast, CancellationToken cancellationToken = default);
+
+    void Update(WeatherForecast forecast);
+
+    void Remove(WeatherForecast forecast);
+
+    Task<bool> SaveChangesAsync(CancellationToken cancellationToken = default);
+}
