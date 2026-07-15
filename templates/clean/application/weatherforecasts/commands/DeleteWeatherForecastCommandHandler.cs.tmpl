@@ -1,0 +1,26 @@
+using MediatR;
+using {{ .Name }}.Domain.Interfaces;
+
+namespace {{ .Name }}.Application.WeatherForecasts.Commands;
+
+public class DeleteWeatherForecastCommandHandler : IRequestHandler<DeleteWeatherForecastCommand, bool>
+{
+    private readonly IWeatherForecastRepository _repository;
+
+    public DeleteWeatherForecastCommandHandler(IWeatherForecastRepository repository)
+    {
+        _repository = repository;
+    }
+
+    public async Task<bool> Handle(DeleteWeatherForecastCommand request, CancellationToken cancellationToken)
+    {
+        var entity = await _repository.GetByIdAsync(request.Id, cancellationToken);
+        if (entity is null)
+        {
+            return false;
+        }
+
+        _repository.Remove(entity);
+        return await _repository.SaveChangesAsync(cancellationToken);
+    }
+}

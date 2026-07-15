@@ -1,0 +1,6 @@
+using MediatR;
+using {{ .Name }}.Application.WeatherForecasts.DTOs;
+
+namespace {{ .Name }}.Application.WeatherForecasts.Queries;
+
+public record GetAllWeatherForecastsQuery : IRequest<IReadOnlyList<WeatherForecastDto>>;

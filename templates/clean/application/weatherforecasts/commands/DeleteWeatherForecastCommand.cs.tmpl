@@ -1,0 +1,5 @@
+using MediatR;
+
+namespace {{ .Name }}.Application.WeatherForecasts.Commands;
+
+public record DeleteWeatherForecastCommand(int Id) : IRequest<bool>;

@@ -27,7 +27,7 @@ const (
 // conventional Clean Architecture folder layout.
 var commonFolders = map[string][]string{
 	layerDomain:         {"Entities", "Enums", "Exceptions", "Interfaces", "ValueObjects"},
-	layerApplication:    {"Interfaces", "Services", "DTOs", "Mappings"},
+	layerApplication:    {"Common"},
 	layerInfrastructure: {"Persistence", "Services"},
 }
 
@@ -317,12 +317,20 @@ func crudExampleTemplates(root string, name string, fs filesystem.FileSystem) []
 	}{
 		{"domain/entities/WeatherForecast.cs.tmpl", fs.Join(root, "src", domainName, "Entities", "WeatherForecast.cs")},
 		{"domain/interfaces/IWeatherForecastRepository.cs.tmpl", fs.Join(root, "src", domainName, "Interfaces", "IWeatherForecastRepository.cs")},
-		{"application/dtos/WeatherForecastDto.cs.tmpl", fs.Join(root, "src", applicationName, "DTOs", "WeatherForecastDto.cs")},
-		{"application/dtos/CreateWeatherForecastDto.cs.tmpl", fs.Join(root, "src", applicationName, "DTOs", "CreateWeatherForecastDto.cs")},
-		{"application/dtos/UpdateWeatherForecastDto.cs.tmpl", fs.Join(root, "src", applicationName, "DTOs", "UpdateWeatherForecastDto.cs")},
-		{"application/mappings/WeatherForecastMappingExtensions.cs.tmpl", fs.Join(root, "src", applicationName, "Mappings", "WeatherForecastMappingExtensions.cs")},
-		{"application/interfaces/IWeatherForecastService.cs.tmpl", fs.Join(root, "src", applicationName, "Interfaces", "IWeatherForecastService.cs")},
-		{"application/services/WeatherForecastService.cs.tmpl", fs.Join(root, "src", applicationName, "Services", "WeatherForecastService.cs")},
+		{"application/weatherforecasts/dtos/WeatherForecastDto.cs.tmpl", fs.Join(root, "src", applicationName, "WeatherForecasts", "DTOs", "WeatherForecastDto.cs")},
+		{"application/weatherforecasts/dtos/CreateWeatherForecastDto.cs.tmpl", fs.Join(root, "src", applicationName, "WeatherForecasts", "DTOs", "CreateWeatherForecastDto.cs")},
+		{"application/weatherforecasts/dtos/UpdateWeatherForecastDto.cs.tmpl", fs.Join(root, "src", applicationName, "WeatherForecasts", "DTOs", "UpdateWeatherForecastDto.cs")},
+		{"application/weatherforecasts/mappings/WeatherForecastMappingExtensions.cs.tmpl", fs.Join(root, "src", applicationName, "WeatherForecasts", "Mappings", "WeatherForecastMappingExtensions.cs")},
+		{"application/weatherforecasts/commands/CreateWeatherForecastCommand.cs.tmpl", fs.Join(root, "src", applicationName, "WeatherForecasts", "Commands", "CreateWeatherForecastCommand.cs")},
+		{"application/weatherforecasts/commands/CreateWeatherForecastCommandHandler.cs.tmpl", fs.Join(root, "src", applicationName, "WeatherForecasts", "Commands", "CreateWeatherForecastCommandHandler.cs")},
+		{"application/weatherforecasts/commands/UpdateWeatherForecastCommand.cs.tmpl", fs.Join(root, "src", applicationName, "WeatherForecasts", "Commands", "UpdateWeatherForecastCommand.cs")},
+		{"application/weatherforecasts/commands/UpdateWeatherForecastCommandHandler.cs.tmpl", fs.Join(root, "src", applicationName, "WeatherForecasts", "Commands", "UpdateWeatherForecastCommandHandler.cs")},
+		{"application/weatherforecasts/commands/DeleteWeatherForecastCommand.cs.tmpl", fs.Join(root, "src", applicationName, "WeatherForecasts", "Commands", "DeleteWeatherForecastCommand.cs")},
+		{"application/weatherforecasts/commands/DeleteWeatherForecastCommandHandler.cs.tmpl", fs.Join(root, "src", applicationName, "WeatherForecasts", "Commands", "DeleteWeatherForecastCommandHandler.cs")},
+		{"application/weatherforecasts/queries/GetAllWeatherForecastQuery.cs.tmpl", fs.Join(root, "src", applicationName, "WeatherForecasts", "Queries", "GetAllWeatherForecastQuery.cs")},
+		{"application/weatherforecasts/queries/GetAllWeatherForecastQueryHandler.cs.tmpl", fs.Join(root, "src", applicationName, "WeatherForecasts", "Queries", "GetAllWeatherForecastQueryHandler.cs")},
+		{"application/weatherforecasts/queries/GetWeatherForecastByIdQuery.cs.tmpl", fs.Join(root, "src", applicationName, "WeatherForecasts", "Queries", "GetWeatherForecastByIdQuery.cs")},
+		{"application/weatherforecasts/queries/GetWeatherForecastByIdQueryHandler.cs.tmpl", fs.Join(root, "src", applicationName, "WeatherForecasts", "Queries", "GetWeatherForecastByIdQueryHandler.cs")},
 		{"infrastructure/persistence/repositories/WeatherForecastRepository.cs.tmpl", fs.Join(root, "src", infrastructureName, "Persistence", "Repositories", "WeatherForecastRepository.cs")},
 	}
 }

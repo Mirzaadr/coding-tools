@@ -1,0 +1,6 @@
+using MediatR;
+using {{ .Name }}.Application.WeatherForecasts.DTOs;
+
+namespace {{ .Name }}.Application.WeatherForecasts.Commands;
+
+public record UpdateWeatherForecastCommand(int Id, UpdateWeatherForecastDto Dto) : IRequest<bool>;

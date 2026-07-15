@@ -1,0 +1,22 @@
+using MediatR;
+using {{ .Name }}.Application.WeatherForecasts.DTOs;
+using {{ .Name }}.Application.WeatherForecasts.Mappings;
+using {{ .Name }}.Domain.Interfaces;
+
+namespace {{ .Name }}.Application.WeatherForecasts.Queries;
+
+public class GetAllWeatherForecastsQueryHandler : IRequestHandler<GetAllWeatherForecastsQuery, IReadOnlyList<WeatherForecastDto>>
+{
+    private readonly IWeatherForecastRepository _repository;
+
+    public GetAllWeatherForecastsQueryHandler(IWeatherForecastRepository repository)
+    {
+        _repository = repository;
+    }
+
+    public async Task<IReadOnlyList<WeatherForecastDto>> Handle(GetAllWeatherForecastsQuery request, CancellationToken cancellationToken)
+    {
+        var forecasts = await _repository.GetAllAsync(cancellationToken);
+        return forecasts.Select(f => f.ToDto()).ToList();
+    }
+}

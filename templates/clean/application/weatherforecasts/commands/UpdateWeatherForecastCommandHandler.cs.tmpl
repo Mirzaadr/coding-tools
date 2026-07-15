@@ -1,0 +1,28 @@
+using MediatR;
+using {{ .Name }}.Application.WeatherForecasts.Mappings;
+using {{ .Name }}.Domain.Interfaces;
+
+namespace {{ .Name }}.Application.WeatherForecasts.Commands;
+
+public class UpdateWeatherForecastCommandHandler : IRequestHandler<UpdateWeatherForecastCommand, bool>
+{
+    private readonly IWeatherForecastRepository _repository;
+
+    public UpdateWeatherForecastCommandHandler(IWeatherForecastRepository repository)
+    {
+        _repository = repository;
+    }
+
+    public async Task<bool> Handle(UpdateWeatherForecastCommand request, CancellationToken cancellationToken)
+    {
+        var entity = await _repository.GetByIdAsync(request.Id, cancellationToken);
+        if (entity is null)
+        {
+            return false;
+        }
+
+        entity.ApplyUpdate(request.Dto);
+        _repository.Update(entity);
+        return await _repository.SaveChangesAsync(cancellationToken);
+    }
+}
